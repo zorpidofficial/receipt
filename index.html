@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zorpid Diagnostics Invoice System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white; padding: 0; }
+            .print-container { 
+                box-shadow: none !important; 
+                margin: 0 !important; 
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+        }
+        .invoice-box {
+            max-width: 800px;
+            margin: auto;
+            padding: 30px;
+            border: 1px solid #eee;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);
+            font-size: 14px;
+            line-height: 24px;
+            font-family: 'Helvetica Neue', 'Helvetica', Helvetica, Arial, sans-serif;
+            color: #555;
+            background: white;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen py-10">
+
+    <!-- Search UI -->
+    <div class="max-w-xl mx-auto mb-10 p-6 bg-white rounded-xl shadow-md no-print">
+        <h1 class="text-2xl font-bold text-gray-800 mb-4">Invoice Retrieval System</h1>
+        <div class="flex gap-2">
+            <input type="text" id="invoiceInput" placeholder="Enter Last 12 Digits of ID..." 
+                   class="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+            <button onclick="fetchInvoice()" id="fetchBtn"
+                    class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">
+                Load Invoice
+            </button>
+        </div>
+        <p id="statusMsg" class="mt-2 text-sm text-gray-500"></p>
+    </div>
+
+    <!-- Invoice Template (Hidden until data loaded) -->
+    <div id="invoiceContent" class="hidden">
+        <div class="no-print flex justify-center mb-4">
+            <button onclick="window.print()" class="bg-green-600 text-white px-8 py-2 rounded-full font-semibold hover:bg-green-700 shadow-lg">
+                Print / Save as PDF
+            </button>
+        </div>
+
+        <div class="invoice-box print-container">
+            <table cellpadding="0" cellspacing="0" class="w-full text-left">
+                <!-- Header -->
+                <tr class="top">
+                    <td colspan="4">
+                        <table class="w-full mb-8">
+                            <tr>
+                                <td class="text-3xl font-bold text-blue-900">
+                                    Zorpid Diagnostics
+                                </td>
+                                <td class="text-right">
+                                    <div class="font-semibold text-gray-800">Invoice #: <span id="disp-invoice-id"></span></div>
+                                    <div class="text-gray-600">Booking ID: <span id="disp-booking-id"></span></div>
+                                    <div class="text-gray-600">Date: <span id="disp-reg-date"></span></div>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                <!-- Info -->
+                <tr class="information">
+                    <td colspan="4">
+                        <table class="w-full mb-8 border-t border-b py-4">
+                            <tr>
+                                <td class="align-top">
+                                    <h3 class="font-bold text-gray-700">Patient Details:</h3>
+                                    <div id="disp-patient-name" class="text-lg"></div>
+                                    <div>Age: <span id="disp-age"></span> | Gender: <span id="disp-gender"></span></div>
+                                    <div>Referred by: <span id="disp-referred"></span></div>
+                                </td>
+                                <td class="text-right align-top">
+                                    <h3 class="font-bold text-gray-700">Company Info:</h3>
+                                    <div>622A/5A Govindpuri, Kalkaji, New Delhi</div>
+                                    <div>Phone: +91 8448879897</div>
+                                    <div>MSME Reg No: <span id="disp-msme"></span></div>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                <!-- Table Header -->
+                <tr class="bg-gray-100 font-bold border-b">
+                    <td class="p-2">Test Name</td>
+                    <td class="p-2 text-center">Quantity</td>
+                    <td class="p-2 text-right">MRP (₹)</td>
+                    <td class="p-2 text-right">Discounted Price (₹)</td>
+                </tr>
+
+                <!-- Items will be injected here -->
+                <tbody id="test-items">
+                </tbody>
+
+                <!-- Totals -->
+                <tr>
+                    <td colspan="2"></td>
+                    <td colspan="2" class="pt-6">
+                        <div class="flex justify-between border-t-2 border-gray-800 pt-2">
+                            <span class="font-bold text-lg">Total Amount:</span>
+                            <span class="font-bold text-lg text-blue-900" id="disp-total"></span>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+
+            <div class="mt-12 text-center border-t pt-6 italic text-gray-500">
+                <p class="text-lg font-semibold text-gray-700 not-italic mb-1">Thank you for choosing Zorpid Diagnostics!</p>
+                <p>Wishing you a speedy recovery and good health.</p>
+                <p class="text-xs mt-4">This is a computer-generated invoice and does not require a physical signature.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // REPLACE THIS with your deployed Apps Script Web App URL
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyB5EzKMBoGQU---mmJ156RdlZZE63dvG53j2jOdPnzopk9WXA_J4r3fOEzhQ5z0zfckg/exec"; 
+
+        async function fetchInvoice() {
+            const id = document.getElementById('invoiceInput').value.trim();
+            const btn = document.getElementById('fetchBtn');
+            const status = document.getElementById('statusMsg');
+            
+            if (!id) return;
+
+            btn.disabled = true;
+            status.innerText = "Searching records...";
+            
+            try {
+                // If SCRIPT_URL is empty, we use mock data for demonstration
+                let data;
+                if (!SCRIPT_URL) {
+                    console.warn("No Apps Script URL provided, using mock data.");
+                    data = getMockData(id);
+                } else {
+                    const response = await fetch(`${SCRIPT_URL}?invoiceId=${id}`);
+                    data = await response.json();
+                }
+
+                if (data.success) {
+                    displayInvoice(data.data);
+                    status.innerText = "Invoice loaded successfully.";
+                } else {
+                    status.innerText = "Error: " + data.message;
+                }
+            } catch (err) {
+                status.innerText = "Connection failed. Check console.";
+                console.error(err);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function displayInvoice(data) {
+            document.getElementById('invoiceContent').classList.remove('hidden');
+            
+            // Set Headers
+            document.getElementById('disp-invoice-id').innerText = data.invoiceId;
+            document.getElementById('disp-booking-id').innerText = data.bookingId;
+            document.getElementById('disp-reg-date').innerText = data.registrationDate;
+            document.getElementById('disp-patient-name').innerText = data.patientName;
+            document.getElementById('disp-age').innerText = data.age;
+            document.getElementById('disp-gender').innerText = data.gender;
+            document.getElementById('disp-referred').innerText = data.referredBy;
+            document.getElementById('disp-msme').innerText = data.msmeRegNo;
+
+            // Render Table
+            const tbody = document.getElementById('test-items');
+            tbody.innerHTML = '';
+            let total = 0;
+
+            data.tests.forEach(test => {
+                const row = `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="p-2 py-4 font-medium">${test.name}</td>
+                        <td class="p-2 text-center">${test.qty}</td>
+                        <td class="p-2 text-right text-gray-400 line-through">₹${test.mrp.toFixed(2)}</td>
+                        <td class="p-2 text-right font-semibold">₹${test.discountedPrice.toFixed(2)}</td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+                total += (test.discountedPrice * test.qty);
+            });
+
+            document.getElementById('disp-total').innerText = `₹${total.toLocaleString('en-IN')}`;
+        }
+
+        // Mock data logic for standalone preview
+        // function getMockData(id) {
+        //     return {
+        //         success: true,
+        //         data: {
+        //             patientName: "Aditya Sharma",
+        //             bookingId: "018e2a3b", // First 8 of UUIDv7
+        //             invoiceId: id || "92c10b45d2e8", // Last 12 of UUIDv7
+        //             msmeRegNo: "UDYAM-DL-01-0012345",
+        //             referredBy: "Dr. Sameer Varma",
+        //             age: "34",
+        //             gender: "Male",
+        //             registrationDate: "2023-10-25",
+        //             tests: [
+        //                 { name: "Full Body Checkup (Premium)", qty: 1, mrp: 5000, discountedPrice: 2499 },
+        //                 { name: "Vitamin D3 (25-OH)", qty: 1, mrp: 1200, discountedPrice: 800 },
+        //                 { name: "CBC with Peripheral Smear", qty: 1, mrp: 600, discountedPrice: 450 }
+        //             ]
+        //         }
+        //     };
+        // }
+    </script>
+</body>
+</html>
